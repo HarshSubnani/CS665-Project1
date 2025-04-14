@@ -229,8 +229,116 @@ customer_tree.bind("<<TreeviewSelect>>", select_customer)
 refresh_customer_table()
 
 
+#-- SALESPERSONS --
 
-ttk.Label(salespersons_tab, text="Salespersons CRUD UI").pack(pady=20)
+def refresh_salesperson_table():
+    for row in salesperson_tree.get_children():
+        salesperson_tree.delete(row)
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM Salespersons")
+    for row in cursor.fetchall():
+        salesperson_tree.insert("", tk.END, values=row)
+    conn.close()
+
+def clear_salesperson_fields():
+    for entry in salesperson_entries.values():
+        entry.delete(0, tk.END)
+
+def add_salesperson():
+    data = tuple(entry.get() for entry in salesperson_entries.values())
+    if any(not val for val in data):
+        messagebox.showwarning("Input Error", "All fields are required.")
+        return
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO Salespersons (first_name, last_name, hire_date, phone_number)
+        VALUES (?, ?, ?, ?)
+    """, data)
+    conn.commit()
+    conn.close()
+    refresh_salesperson_table()
+    clear_salesperson_fields()
+
+def update_salesperson():
+    selected = salesperson_tree.focus()
+    if not selected:
+        messagebox.showwarning("Selection Error", "No salesperson selected.")
+        return
+    values = salesperson_tree.item(selected)["values"]
+    salesperson_id = values[0]
+    data = tuple(entry.get() for entry in salesperson_entries.values())
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE Salespersons
+        SET first_name=?, last_name=?, hire_date=?, phone_number=?
+        WHERE salesperson_id=?
+    """, (*data, salesperson_id))
+    conn.commit()
+    conn.close()
+    refresh_salesperson_table()
+    clear_salesperson_fields()
+
+def delete_salesperson():
+    selected = salesperson_tree.focus()
+    if not selected:
+        messagebox.showwarning("Selection Error", "No salesperson selected.")
+        return
+    salesperson_id = salesperson_tree.item(selected)["values"][0]
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM Salespersons WHERE salesperson_id=?", (salesperson_id,))
+    conn.commit()
+    conn.close()
+    refresh_salesperson_table()
+    clear_salesperson_fields()
+
+def select_salesperson(event):
+    selected = salesperson_tree.focus()
+    if not selected:
+        return
+    values = salesperson_tree.item(selected)["values"]
+    for i, key in enumerate(salesperson_entries):
+        salesperson_entries[key].delete(0, tk.END)
+        salesperson_entries[key].insert(0, values[i+1])
+
+for widget in salespersons_tab.winfo_children():
+    widget.destroy()
+
+salesperson_form = ttk.LabelFrame(salespersons_tab, text="Salesperson Info")
+salesperson_form.pack(padx=10, pady=10, fill='x')
+
+salesperson_entries = {}
+fields = ["First Name", "Last Name", "Hire Date", "Phone Number"]
+for i, field in enumerate(fields):
+    label = ttk.Label(salesperson_form, text=field + ":")
+    label.grid(row=i, column=0, padx=5, pady=5, sticky='w')
+    entry = ttk.Entry(salesperson_form)
+    entry.grid(row=i, column=1, padx=5, pady=5, sticky='ew')
+    salesperson_entries[field.lower().replace(" ", "_")] = entry
+
+salesperson_button_frame = ttk.Frame(salesperson_form)
+salesperson_button_frame.grid(row=0, column=2, rowspan=5, padx=10)
+
+ttk.Button(salesperson_button_frame, text="Add", command=add_salesperson).grid(row=0, column=0, pady=2)
+ttk.Button(salesperson_button_frame, text="Update", command=update_salesperson).grid(row=1, column=0, pady=2)
+ttk.Button(salesperson_button_frame, text="Delete", command=delete_salesperson).grid(row=2, column=0, pady=2)
+ttk.Button(salesperson_button_frame, text="Clear", command=clear_salesperson_fields).grid(row=3, column=0, pady=2)
+
+salesperson_tree = ttk.Treeview(salespersons_tab, columns=("ID", "First Name", "Last Name", "Hire Date", "Phone Number"), show='headings')
+for col in salesperson_tree["columns"]:
+    salesperson_tree.heading(col, text=col)
+    salesperson_tree.column(col, anchor="center", width=120)
+
+salesperson_tree.pack(padx=10, pady=10, fill='both', expand=True)
+salesperson_tree.bind("<<TreeviewSelect>>", select_salesperson)
+
+refresh_salesperson_table()
+
+
+
 ttk.Label(sales_tab, text="Sales CRUD UI").pack(pady=20)
 
 root.mainloop()
