@@ -339,7 +339,145 @@ refresh_salesperson_table()
 
 
 
-ttk.Label(sales_tab, text="Sales CRUD UI").pack(pady=20)
+#-- SALES --
+
+def refresh_sales_table():
+    for row in sales_tree.get_children():
+        sales_tree.delete(row)
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT s.sale_id, c.make || ' ' || c.model || ' (' || c.year || ')',
+               cu.first_name || ' ' || cu.last_name,
+               sp.first_name || ' ' || sp.last_name,
+               s.sale_date, s.sale_price
+        FROM Sales s
+        JOIN Cars c ON s.stock_id = c.stock_id
+        JOIN Customers cu ON s.customer_id = cu.customer_id
+        JOIN Salespersons sp ON s.salesperson_id = sp.salesperson_id
+    """)
+    for row in cursor.fetchall():
+        sales_tree.insert("", tk.END, values=row)
+    conn.close()
+
+def refresh_dropdowns():
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT stock_id, make || ' ' || model || ' (' || year || ')' FROM Cars WHERE availability = 'Yes'")
+    cars = cursor.fetchall()
+    sales_entries["stock_id"]["menu"].delete(0, "end")
+    sales_entries["stock_id"].var.set("")
+    for val in cars:
+        sales_entries["stock_id"]["menu"].add_command(label=val[1], command=tk._setit(sales_entries["stock_id"].var, val[0]))
+
+    cursor.execute("SELECT customer_id, first_name || ' ' || last_name FROM Customers")
+    customers = cursor.fetchall()
+    sales_entries["customer_id"]["menu"].delete(0, "end")
+    sales_entries["customer_id"].var.set("")
+    for val in customers:
+        sales_entries["customer_id"]["menu"].add_command(label=val[1], command=tk._setit(sales_entries["customer_id"].var, val[0]))
+
+    cursor.execute("SELECT salesperson_id, first_name || ' ' || last_name FROM Salespersons")
+    salespeople = cursor.fetchall()
+    sales_entries["salesperson_id"]["menu"].delete(0, "end")
+    sales_entries["salesperson_id"].var.set("")
+    for val in salespeople:
+        sales_entries["salesperson_id"]["menu"].add_command(label=val[1], command=tk._setit(sales_entries["salesperson_id"].var, val[0]))
+
+    conn.close()
+
+def clear_sales_fields():
+    for widget in sales_entries:
+        if widget == "stock_id" or widget == "customer_id" or widget == "salesperson_id":
+            sales_entries[widget].var.set("")
+        else:
+            sales_entries[widget].delete(0, tk.END)
+
+def add_sale():
+    stock = sales_entries["stock_id"].var.get()
+    cust = sales_entries["customer_id"].var.get()
+    sp = sales_entries["salesperson_id"].var.get()
+    date = sales_entries["sale_date"].get()
+    price = sales_entries["sale_price"].get()
+    if not all([stock, cust, sp, date, price]):
+        messagebox.showwarning("Missing Info", "All fields required.")
+        return
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO Sales (stock_id, customer_id, salesperson_id, sale_date, sale_price)
+        VALUES (?, ?, ?, ?, ?)
+    """, (stock, cust, sp, date, price))
+    cursor.execute("UPDATE Cars SET availability = 'No' WHERE stock_id = ?", (stock,))
+    conn.commit()
+    conn.close()
+    refresh_sales_table()
+    refresh_dropdowns()
+    clear_sales_fields()
+
+def delete_sale():
+    selected = sales_tree.focus()
+    if not selected:
+        return
+    sale_id = sales_tree.item(selected)["values"][0]
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT stock_id FROM Sales WHERE sale_id = ?", (sale_id,))
+    stock_id = cursor.fetchone()[0]
+    cursor.execute("DELETE FROM Sales WHERE sale_id=?", (sale_id,))
+    cursor.execute("UPDATE Cars SET availability = 'Yes' WHERE stock_id = ?", (stock_id,))
+    conn.commit()
+    conn.close()
+    refresh_sales_table()
+    refresh_dropdowns()
+
+for widget in sales_tab.winfo_children():
+    widget.destroy()
+
+sales_entries = {}
+form = ttk.LabelFrame(sales_tab, text="Record a Sale")
+form.pack(padx=10, pady=10, fill='x')
+
+def dropdown(master, name):
+    var = tk.StringVar()
+    menu = tk.OptionMenu(master, var, "")
+    menu.var = var
+    return menu
+
+ttk.Label(form, text="Car:").grid(row=0, column=0, sticky='w')
+sales_entries["stock_id"] = dropdown(form, "Car")
+sales_entries["stock_id"].grid(row=0, column=1, sticky='w')
+
+ttk.Label(form, text="Customer:").grid(row=1, column=0, sticky='w')
+sales_entries["customer_id"] = dropdown(form, "Customer")
+sales_entries["customer_id"].grid(row=1, column=1, sticky='w')
+
+ttk.Label(form, text="Salesperson:").grid(row=2, column=0, sticky='w')
+sales_entries["salesperson_id"] = dropdown(form, "Salesperson")
+sales_entries["salesperson_id"].grid(row=2, column=1, sticky='w')
+
+ttk.Label(form, text="Sale Date:").grid(row=3, column=0, sticky='w')
+sales_entries["sale_date"] = ttk.Entry(form)
+sales_entries["sale_date"].grid(row=3, column=1)
+
+ttk.Label(form, text="Sale Price:").grid(row=4, column=0, sticky='w')
+sales_entries["sale_price"] = ttk.Entry(form)
+sales_entries["sale_price"].grid(row=4, column=1)
+
+ttk.Button(form, text="Add Sale", command=add_sale).grid(row=0, column=2, rowspan=2, padx=10)
+ttk.Button(form, text="Delete Sale", command=delete_sale).grid(row=2, column=2, rowspan=2, padx=10)
+ttk.Button(form, text="Clear", command=clear_sales_fields).grid(row=4, column=2, padx=10)
+
+sales_tree = ttk.Treeview(sales_tab, columns=("ID", "Car", "Customer", "Salesperson", "Date", "Price"), show='headings')
+for col in sales_tree["columns"]:
+    sales_tree.heading(col, text=col)
+    sales_tree.column(col, anchor="center", width=140)
+sales_tree.pack(padx=10, pady=10, fill='both', expand=True)
+
+refresh_dropdowns()
+refresh_sales_table()
+
 
 root.mainloop()
 
