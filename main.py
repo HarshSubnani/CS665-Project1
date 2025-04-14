@@ -21,6 +21,7 @@ tab_control.add(sales_tab, text='Sales')
 tab_control.pack(expand=1, fill='both')
 
 
+# -- CARS --
 
 car_fields = ['Make', 'Model', 'Year', 'Price', 'Availability']
 car_entries = {}
@@ -119,7 +120,116 @@ ttk.Button(cars_tab, text="Delete Car", command=delete_car).grid(row=7, column=0
 ttk.Button(cars_tab, text="View All Cars", command=view_cars).grid(row=7, column=1, pady=10)
 
 
-ttk.Label(customers_tab, text="Customers CRUD UI").pack(pady=20)
+# -- CUSTOMERS --
+
+def refresh_customer_table():
+    for row in customer_tree.get_children():
+        customer_tree.delete(row)
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM Customers")
+    for row in cursor.fetchall():
+        customer_tree.insert("", tk.END, values=row)
+    conn.close()
+
+def clear_customer_fields():
+    for entry in customer_entries.values():
+        entry.delete(0, tk.END)
+
+def add_customer():
+    data = tuple(entry.get() for entry in customer_entries.values())
+    if any(not val for val in data[:2]):  
+        messagebox.showwarning("Input Error", "First and Last Name are required.")
+        return
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO Customers (first_name, last_name, contact_number, email, address)
+        VALUES (?, ?, ?, ?, ?)
+    """, data)
+    conn.commit()
+    conn.close()
+    refresh_customer_table()
+    clear_customer_fields()
+
+def update_customer():
+    selected = customer_tree.focus()
+    if not selected:
+        messagebox.showwarning("Selection Error", "No customer selected.")
+        return
+    values = customer_tree.item(selected)["values"]
+    customer_id = values[0]
+    data = tuple(entry.get() for entry in customer_entries.values())
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE Customers
+        SET first_name=?, last_name=?, contact_number=?, email=?, address=?
+        WHERE customer_id=?
+    """, (*data, customer_id))
+    conn.commit()
+    conn.close()
+    refresh_customer_table()
+    clear_customer_fields()
+
+def delete_customer():
+    selected = customer_tree.focus()
+    if not selected:
+        messagebox.showwarning("Selection Error", "No customer selected.")
+        return
+    customer_id = customer_tree.item(selected)["values"][0]
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM Customers WHERE customer_id=?", (customer_id,))
+    conn.commit()
+    conn.close()
+    refresh_customer_table()
+    clear_customer_fields()
+
+def select_customer(event):
+    selected = customer_tree.focus()
+    if not selected:
+        return
+    values = customer_tree.item(selected)["values"]
+    for i, key in enumerate(customer_entries):
+        customer_entries[key].delete(0, tk.END)
+        customer_entries[key].insert(0, values[i+1])
+
+for widget in customers_tab.winfo_children():
+    widget.destroy()
+
+customer_form = ttk.LabelFrame(customers_tab, text="Customer Info")
+customer_form.pack(padx=10, pady=10, fill='x')
+
+customer_entries = {}
+fields = ["First Name", "Last Name", "Contact Number", "Email", "Address"]
+for i, field in enumerate(fields):
+    label = ttk.Label(customer_form, text=field + ":")
+    label.grid(row=i, column=0, padx=5, pady=5, sticky='w')
+    entry = ttk.Entry(customer_form)
+    entry.grid(row=i, column=1, padx=5, pady=5, sticky='ew')
+    customer_entries[field.lower().replace(" ", "_")] = entry
+
+customer_button_frame = ttk.Frame(customer_form)
+customer_button_frame.grid(row=0, column=2, rowspan=5, padx=10)
+
+ttk.Button(customer_button_frame, text="Add", command=add_customer).grid(row=0, column=0, pady=2)
+ttk.Button(customer_button_frame, text="Update", command=update_customer).grid(row=1, column=0, pady=2)
+ttk.Button(customer_button_frame, text="Delete", command=delete_customer).grid(row=2, column=0, pady=2)
+ttk.Button(customer_button_frame, text="Clear", command=clear_customer_fields).grid(row=3, column=0, pady=2)
+
+customer_tree = ttk.Treeview(customers_tab, columns=("ID", "First Name", "Last Name", "Contact", "Email", "Address"), show='headings')
+for col in customer_tree["columns"]:
+    customer_tree.heading(col, text=col)
+    customer_tree.column(col, anchor="center", width=120)
+
+customer_tree.pack(padx=10, pady=10, fill='both', expand=True)
+customer_tree.bind("<<TreeviewSelect>>", select_customer)
+
+refresh_customer_table()
+
+
+
 ttk.Label(salespersons_tab, text="Salespersons CRUD UI").pack(pady=20)
 ttk.Label(sales_tab, text="Sales CRUD UI").pack(pady=20)
 
