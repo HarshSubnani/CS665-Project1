@@ -478,6 +478,52 @@ sales_tree.pack(padx=10, pady=10, fill='both', expand=True)
 refresh_dropdowns()
 refresh_sales_table()
 
+# -- GENERATE COMPLETE REPORT --
+
+report_tab = ttk.Frame(tab_control)
+tab_control.add(report_tab, text='Reports')
+
+report_tree = ttk.Treeview(report_tab, columns=("Car", "Customer", "Salesperson", "Date", "Price"), show='headings')
+for col in report_tree["columns"]:
+    report_tree.heading(col, text=col)
+    report_tree.column(col, anchor="center", width=130)
+report_tree.pack(padx=10, pady=10, fill='both', expand=True)
+
+summary_label = ttk.Label(report_tab, text="", font=("Arial", 12, "bold"))
+summary_label.pack(pady=10)
+
+def generate_report():
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT c.make || ' ' || c.model || ' (' || c.year || ')',
+               cu.first_name || ' ' || cu.last_name,
+               sp.first_name || ' ' || sp.last_name,
+               s.sale_date,
+               s.sale_price
+        FROM Sales s
+        JOIN Cars c ON s.stock_id = c.stock_id
+        JOIN Customers cu ON s.customer_id = cu.customer_id
+        JOIN Salespersons sp ON s.salesperson_id = sp.salesperson_id
+    """)
+    rows = cursor.fetchall()
+
+    for row in report_tree.get_children():
+        report_tree.delete(row)
+
+    total_sales = 0
+    total_revenue = 0.0
+
+    for row in rows:
+        report_tree.insert("", tk.END, values=row)
+        total_sales += 1
+        total_revenue += float(row[4])
+
+    summary_label.config(text=f"Total Sales: {total_sales} | Total Revenue: ${total_revenue:,.2f}")
+    conn.close()
+
+ttk.Button(report_tab, text="Generate Report", command=generate_report).pack(pady=5)
+
 
 root.mainloop()
 
