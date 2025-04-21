@@ -56,6 +56,7 @@ def add_car():
         conn.commit()
         conn.close()
         view_cars()
+        refresh_dropdowns()
         messagebox.showinfo("Success", "Car added successfully.")
     except Exception as e:
         messagebox.showerror("Error", str(e))
